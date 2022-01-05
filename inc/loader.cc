@@ -293,3 +293,43 @@ unload_binary(Binary *bin)
     }
   }
 }
+
+/***
+ * 
+ * helper function for print_section
+ * @param bin
+ * @param section_name
+ * 
+***/
+
+void print_section_content(Section& section)
+{
+  printf("%s:\n",section.name.c_str());
+  if (!section.bytes)
+    return;
+  for(int i=0; i < section.size; ++i)
+  {
+    if ((i%16 == 0) && i)
+      printf("\n"); 
+    printf("%02x ",section.bytes[i]);
+  }
+  printf("\n");
+}
+
+/***
+ * 
+ * print section given a binary and a section_name
+ * @param bin
+ * @param section_name
+ * 
+***/
+
+void print_section(Binary* bin, std::string& section_name)
+{
+  Section sec;
+  for(auto & sec : bin->sections)
+  {
+    if (sec.name == section_name)
+      print_section_content(sec);
+  }
+}

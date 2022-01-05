@@ -72,6 +72,6 @@ public:
 
 int  load_binary   (std::string &fname, Binary *bin, Binary::BinaryType type);
 void unload_binary (Binary *bin);
-
+void print_section(Binary* bin, std::string& section_name);
 #endif /* LOADER_H */
 

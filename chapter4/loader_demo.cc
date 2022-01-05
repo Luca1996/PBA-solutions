@@ -46,6 +46,12 @@ main(int argc, char *argv[])
              (sym->type & Symbol::SYM_TYPE_FUNC) ? "FUNC" : "");
     }
   }
+  
+  if (argc == 3) 
+  {
+    std::string sec_name = (std::string) argv[2];
+    print_section(&bin,sec_name);
+  }
 
   unload_binary(&bin);
 
