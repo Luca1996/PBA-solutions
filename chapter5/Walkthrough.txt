@@ -1,0 +1,67 @@
+chapter 5
+
+lvl 1: 
+First flag is indicated in the book -> 84b34c124b2ba5ca224af8e33b077e9e
+
+lvl2:
+We are presented with an ELF executable. Executing it a couple of time we can see that it prints an hex. We can infer that it is using a sort of random function to print the hex number.
+Using both string and ltrace we can see that functions like time,srand,rand are used, confirming our hypotheses. Using objdump over the .text section we can see that:
+400512:	e8 c9 ff ff ff       	call   4004e0 <rand@plt>
+400517:	99                   	cdq    
+400518:	c1 ea 1c             	shr    edx,0x1c
+40051b:	01 d0                	add    eax,edx
+40051d:	83 e0 0f             	and    eax,0xf
+400520:	29 d0                	sub    eax,edx
+400522:	48 98                	cdqe   
+400524:	48 8b 3c c5 60 10 60 	mov    rdi,QWORD PTR [rax*8+0x601060]
+40052b:	00 
+40052c:	e8 6f ff ff ff       	call   4004a0 <puts@plt>
+
+after using rand the result is placed in RAX, that it is used as a displacement in the mov at 400524.
+
+What that instruction does is: read address indexed at 0x601060 sum it to RAX, access it and use it as parameter for puts.
+So what is at address 0x601060 is the array of hexes that the program is printing.
+So using GDB we can check what is at 0x601060 with x/4x 0x601060. Here we find an address, if we do x/16s <address> we can see the full array of strings that will be printed.
+Therefore this is the flag 034fc4f6a536f2bf74f8d6d3816cdf88.
+
+lvl3:
+using readelf we can see that the header has some problems:
+- the OSABI bit is wrong
+- the machine bit is wrong
+- the program header address is deadbeef
+- the .text section is marked as SHT_NOBITS type
+just mark them properly and execute it. I guess it is doing something like a md5 of its .text section 
+
+lvl4:
+using readelf and strings we don't get any hint. So I tried running the program and nothing happened; the exit status was 0, so it seems to execute correctly.
+Monitoring it with ltrace we can see that it is setting an environment variable called FLAG that is equal to 656cf8aecb76113a4dece1688c61d0e7.
+
+lvl5:
+the point here is that the binary itself is doing nothing, but looking at the strings it is possible to see "key" and "decrypted key", in particular "key" is at 0x400774, that is referenced at 0x400621, part of a function starting at 0x400620. But this function is never called. 
+What it does is taking what is at address 0x400540 as a key and xoring it with 4 dwords pushed on stack, that will be later on printed. 
+At addr 0x400540 we can find the first parameter of libc_start_main, that is the pointer to the main function, which in this case is a pointer to 0x400540 that is the function that is printing "nothing here".
+So simply modifying the RIP register to start executing the code at 0x400620 is not enough because the key will not be decrypted correctly, due to the fact that "400540" is not the correct key. 
+Then editing the binary on disk, looking for the bytes representing the address that will be passed to the libc_start_main function, to contain the value "400621" (be careful aboud endianess) and executing it, it will return the correct decrypted key.
+
+lvl6:
+the program executes the Fibonacci sequence. Looking at the strings we can see a strcmp and a setenv, in addition to some particular strings like "get_data_addr" and "DATA_ADDR".
+Looking into the binary using objdump we can see that the program is comparing what is passed via cmdline as first argument with the string "get_data_addr".
+So then using ltrace it is possible to see that after the comparison the program is setting an environment variable called "DATA_ADDR" placing the addr 0x4006c1 into it. Looking at that address we can see some strange instructions from objdump and then a lea:
+4006c1:	2e 29 c6             	cs sub esi,eax
+4006c4:	4a 0f 03 a6 ee 2a 30 	rex.WX lsl rsp,WORD PTR [rsi+0x7f302aee]
+4006cb:	7f 
+4006cc:	ec                   	in     al,dx
+4006cd:	c8 c3 ff 42          	enter  0xffc3,0x42
+4006d1:	48 8d ac 24 90 01 00 	lea    rbp,[rsp+0x190]
+
+From this we can try to infer that the 16 bytes before the lea and starting at 0x4006c1 could potentially be the flag. And so it is, the flag is 2e29c64a0f03a6ee2a307fecc8c3ff42
+
+lvl7:
+It is a 2 file challenge. We have an archive composed of 2 files, an ELF binary and a zip file. The ELF binary contains the password of the zip file. Into the zip file there are 2 binaries that once executed print a C program. Compiling and executing that program a very similar program is printed, what is changing is the name of a variable, that is called as a byte in hex format.
+From what I can guess doing this process 16 times will produce 16 hexes that will be the flag.
+
+lvl8:
+Here we are presented with some ascii text, where there are some lower and upper case characters. I did not get the hint, so I have checked online. Every uppercase char should be considered as a "1" while a lowercase char as a "0" to produce a binary file. What comes out is a bpm file. Using a tool called zsteg, which performs some classic known algorithms to embed data in an image file, we can discover that an ELF file is embedded into it using the LSB technique. The LSB technique is a particular technique, where considering every RGB colour as a vector of 8 bits, modifying the last one will not imply a visual modification of the image. In this way we can hide an executable into the image.
+Once we have the ELF, we can start analizying it. Using ltrace we can see that it is executing a memcpy. So using objdump to disassemble it we can see that it is copying something from the address 0x601060, and then there is a xor loop using the xor key 0xffffffcc. Moreover there is a comment saying that the flag bin len is at address 0x6010b4, therefore inspecting the memory there we can see that the flag binary is 0x53 bytes length. 
+At this point we can use gdb to catch the address of the newly copied memory from the second parameter of the memcpy, and then run until the end of the loop to dump the content of the buffer at copied memory to find out that the last 16bytes are the flag for this last lvl.
+FLAG -> 2235a6b2123404469f4abce71b1dd29f
